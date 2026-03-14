@@ -55,6 +55,70 @@ function uniqueSortedIntegers(values) {
   return [...new Set(values.map((value) => Number(value)).filter(Number.isInteger))].sort((a, b) => a - b);
 }
 
+function buildFallbackPrefilledIndices(answerLength, circleIndex) {
+  const candidates = [];
+
+  for (let index = 0; index < answerLength; index += 1) {
+    if (index !== circleIndex) {
+      candidates.push(index);
+    }
+  }
+
+  const targetVisibleCount = Math.max(2, Math.min(candidates.length, answerLength - 2));
+  const preferredOrder = [
+    0,
+    answerLength - 1,
+    Math.floor(answerLength / 2),
+    1,
+    answerLength - 2,
+    2,
+    answerLength - 3,
+  ];
+  const selected = [];
+
+  for (const index of preferredOrder) {
+    if (index !== circleIndex && index >= 0 && index < answerLength && !selected.includes(index)) {
+      selected.push(index);
+    }
+
+    if (selected.length >= targetVisibleCount) {
+      break;
+    }
+  }
+
+  for (const index of candidates) {
+    if (!selected.includes(index)) {
+      selected.push(index);
+    }
+
+    if (selected.length >= targetVisibleCount) {
+      break;
+    }
+  }
+
+  return selected.sort((a, b) => a - b);
+}
+
+function normalizePrefilledIndices(answerLength, circleIndex, values) {
+  const safeIndices = uniqueSortedIntegers(values).filter(
+    (index) => index >= 0 && index < answerLength && index !== circleIndex,
+  );
+  const maxVisibleCount = Math.max(2, answerLength - 2);
+
+  if (safeIndices.length >= 2 && safeIndices.length <= maxVisibleCount) {
+    return safeIndices;
+  }
+
+  const fallback = buildFallbackPrefilledIndices(answerLength, circleIndex);
+
+  if (safeIndices.length === 0) {
+    return fallback;
+  }
+
+  const repaired = [...new Set([...safeIndices, ...fallback])].filter((index) => index !== circleIndex);
+  return repaired.slice(0, maxVisibleCount).sort((a, b) => a - b);
+}
+
 function validatePuzzleShape(candidate) {
   if (!candidate || typeof candidate !== "object") {
     throw new Error("Puzzle payload must be an object.");
@@ -80,7 +144,6 @@ function validatePuzzleShape(candidate) {
     const clue = String(word?.clue || "").trim();
     const answer = normalizeWord(word?.answer);
     const circleIndex = Number(word?.circleIndex);
-    const prefilledIndices = uniqueSortedIntegers(word?.prefilledIndices || []);
 
     if (!clue) {
       throw new Error(`Word ${index + 1} is missing a clue.`);
@@ -93,6 +156,8 @@ function validatePuzzleShape(candidate) {
     if (!Number.isInteger(circleIndex) || circleIndex < 0 || circleIndex >= answer.length) {
       throw new Error(`Word ${index + 1} has an invalid circle index.`);
     }
+
+    const prefilledIndices = normalizePrefilledIndices(answer.length, circleIndex, word?.prefilledIndices || []);
 
     if (prefilledIndices.includes(circleIndex)) {
       throw new Error(`Word ${index + 1} reveals the circled letter.`);
