@@ -1,6 +1,7 @@
 export class InterestTracker {
-  constructor() {
-    this.uniqueKeys = new Set();
+  constructor(initialKeys = [], onChange = () => {}) {
+    this.uniqueKeys = new Set(initialKeys);
+    this.onChange = onChange;
   }
 
   record(key) {
@@ -19,6 +20,7 @@ export class InterestTracker {
     }
 
     this.uniqueKeys.add(key);
+    this.onChange([...this.uniqueKeys]);
 
     return {
       recorded: true,

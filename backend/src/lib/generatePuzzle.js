@@ -250,6 +250,21 @@ export function preparePuzzlePayload(rawPuzzle) {
   };
 
   const privatePuzzle = validatePuzzleShape(normalizedPuzzle);
+  const circledWord = privatePuzzle.words.map((word) => word.answer[word.circleIndex]).join("");
+
+  if (circledWord === privatePuzzle.finalAnswer && privatePuzzle.words.length > 1) {
+    for (let shift = 1; shift < privatePuzzle.words.length; shift += 1) {
+      const reorderedWords = privatePuzzle.words.map(
+        (_word, index) => privatePuzzle.words[(index + shift) % privatePuzzle.words.length],
+      );
+      const reorderedCircledWord = reorderedWords.map((word) => word.answer[word.circleIndex]).join("");
+
+      if (reorderedCircledWord !== privatePuzzle.finalAnswer) {
+        privatePuzzle.words = reorderedWords;
+        break;
+      }
+    }
+  }
 
   return {
     publicPuzzle: buildPublicPuzzle(privatePuzzle),

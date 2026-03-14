@@ -102,12 +102,25 @@ function canSubmitWord(wordIndex) {
 }
 
 function render() {
-  const title = state.puzzle?.titleClue || "Launch puzzle";
+  const title = state.status === "exhausted"
+    ? "No more launch puzzles today"
+    : state.puzzle?.titleClue || "Launch folio";
   const finalSlots = state.finalGuess;
   const solvedCount = state.solvedWords.filter(Boolean).length;
   const allWordsSolved = solvedCount === 5;
+  const statusBadge = state.status === "exhausted"
+    ? "Exhausted"
+    : state.status === "loading"
+      ? "Loading"
+      : state.finalSolved
+        ? "Completed"
+        : state.puzzle
+          ? `${solvedCount}/5 solved`
+          : "Standby";
   const inventoryLabel =
-    state.remainingPuzzles !== null && state.totalPuzzles !== null
+    state.status === "exhausted"
+      ? `${state.totalPuzzles ?? 0} of ${state.totalPuzzles ?? 0} launch puzzles served`
+      : state.remainingPuzzles !== null && state.totalPuzzles !== null
       ? `${state.remainingPuzzles} of ${state.totalPuzzles} new puzzles left`
       : "20 handcrafted launch puzzles";
   const revealedScramble = Array.from(
@@ -126,8 +139,8 @@ function render() {
   app.innerHTML = `
     <main class="shell ${state.finalSolved ? "is-celebrating" : ""}">
       <section class="hero">
-        <p class="eyebrow">Limited launch puzzle edition</p>
-        <h1>Angaram AI</h1>
+        <p class="eyebrow">Think, Solve, Decode!</p>
+        <h1>LexiGo</h1>
         <p class="intro">
           Solve all five clue words. The circled letters unlock the final 5-letter answer.
         </p>
@@ -147,7 +160,7 @@ function render() {
             <p class="section-kicker">Status</p>
             <h3>${escapeHtml(state.message)}</h3>
           </div>
-          <div class="badge">${solvedCount}/5 solved</div>
+          <div class="badge">${escapeHtml(statusBadge)}</div>
         </div>
 
         ${
@@ -375,11 +388,19 @@ async function loadPuzzle({ forceNew = false } = {}) {
 
     if (!response.ok) {
       if (data?.exhausted) {
+        state.puzzle = null;
+        state.sessionId = "";
+        state.wordInputs = [];
+        state.solvedWords = [];
+        state.circleLetters = [];
+        state.finalGuess = Array(5).fill("");
+        state.finalSolved = false;
         state.status = "exhausted";
         state.message = data.error || "All launch puzzles are exhausted.";
         state.remainingPuzzles = data.remainingPuzzles ?? 0;
         state.totalPuzzles = data.totalPuzzles ?? state.totalPuzzles;
         state.interestClicks = data.interestClicks ?? state.interestClicks;
+        clearSavedState();
         render();
         return;
       }

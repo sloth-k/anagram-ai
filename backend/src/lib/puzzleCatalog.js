@@ -235,11 +235,23 @@ function shuffle(values) {
 }
 
 export class PuzzleCatalog {
-  constructor(activePuzzleLimit = 20) {
+  constructor(activePuzzleLimit = 20, persistedState = null, onChange = () => {}) {
     this.puzzles = rawPuzzleCatalog.map((rawPuzzle) => preparePuzzlePayload(rawPuzzle));
     const safeLimit = Math.max(1, Math.min(activePuzzleLimit, this.puzzles.length));
-    this.order = shuffle(this.puzzles.map((_value, index) => index)).slice(0, safeLimit);
-    this.pointer = 0;
+    const savedOrder = Array.isArray(persistedState?.order) ? persistedState.order : null;
+    const savedPointer = Number.isInteger(persistedState?.pointer) ? persistedState.pointer : 0;
+    const hasUsableSavedState =
+      savedOrder &&
+      savedOrder.length === safeLimit &&
+      new Set(savedOrder).size === savedOrder.length &&
+      savedOrder.every((index) => Number.isInteger(index) && index >= 0 && index < this.puzzles.length);
+
+    this.order = hasUsableSavedState
+      ? savedOrder
+      : shuffle(this.puzzles.map((_value, index) => index)).slice(0, safeLimit);
+    this.pointer = Math.max(0, Math.min(savedPointer, this.order.length));
+    this.onChange = onChange;
+    this.persist();
   }
 
   next() {
@@ -249,6 +261,7 @@ export class PuzzleCatalog {
 
     const puzzle = this.puzzles[this.order[this.pointer]];
     this.pointer += 1;
+    this.persist();
     return puzzle;
   }
 
@@ -258,5 +271,9 @@ export class PuzzleCatalog {
 
   total() {
     return this.order.length;
+  }
+
+  persist() {
+    this.onChange(this.order, this.pointer);
   }
 }

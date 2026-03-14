@@ -7,13 +7,19 @@ import { MemoryRateLimiter } from "./lib/rateLimiter.js";
 import { PuzzleCache } from "./lib/puzzleCache.js";
 import { PuzzleCatalog } from "./lib/puzzleCatalog.js";
 import { InterestTracker } from "./lib/interestTracker.js";
+import { RuntimeStateStore } from "./lib/runtimeStateStore.js";
 
 const env = getEnv();
 const app = express();
+const runtimeStateStore = new RuntimeStateStore();
 const store = new PuzzleStore(env.sessionTtlMinutes);
 const puzzleCache = new PuzzleCache(env.puzzleCacheMinutes);
-const puzzleCatalog = new PuzzleCatalog(env.activePuzzleLimit);
-const interestTracker = new InterestTracker();
+const puzzleCatalog = new PuzzleCatalog(env.activePuzzleLimit, runtimeStateStore.getCatalogState(), (order, pointer) => {
+  runtimeStateStore.setCatalogState(order, pointer);
+});
+const interestTracker = new InterestTracker(runtimeStateStore.getInterestKeys(), (keys) => {
+  runtimeStateStore.setInterestKeys(keys);
+});
 const rateLimiter = new MemoryRateLimiter({
   windowMinutes: env.rateLimitWindowMinutes,
   maxRequests: env.rateLimitMaxRequests,
