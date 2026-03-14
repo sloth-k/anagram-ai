@@ -172,7 +172,7 @@ function render() {
         ? `${state.remainingPuzzles} of ${state.totalPuzzles} new puzzles left`
         : state.launchStateLoaded
           ? "Launch inventory unavailable"
-          : "Loading launch inventory...";
+          : "Loading curated launch inventory...";
   const revealedScramble = Array.from(
     { length: state.puzzle?.scrambledLetters?.length || 5 },
     () => "",
