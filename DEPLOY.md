@@ -30,9 +30,11 @@ Create a new Render Web Service and use these values:
 
 Set these environment variables in Render:
 
-- `GEMINI_API_KEY`: your Google AI Studio API key
-- `GEMINI_MODEL`: `gemini-2.5-flash-lite`
+- `OPENAI_API_KEY`: your OpenAI API key
+- `OPENAI_MODEL`: `gpt-4o-mini`
 - `SESSION_TTL_MINUTES`: `30`
+- `RATE_LIMIT_WINDOW_MINUTES`: `10`
+- `RATE_LIMIT_MAX_REQUESTS`: `20`
 - `ALLOWED_ORIGIN`: your Vercel frontend URL, for example `https://angaram-ai.vercel.app`
 
 After deploy, note your backend URL, for example:

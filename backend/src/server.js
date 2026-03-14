@@ -3,10 +3,43 @@ import cors from "cors";
 import { getEnv } from "./lib/env.js";
 import { PuzzleStore } from "./lib/puzzleStore.js";
 import { generatePuzzle } from "./lib/generatePuzzle.js";
+import { MemoryRateLimiter } from "./lib/rateLimiter.js";
 
 const env = getEnv();
 const app = express();
 const store = new PuzzleStore(env.sessionTtlMinutes);
+const rateLimiter = new MemoryRateLimiter({
+  windowMinutes: env.rateLimitWindowMinutes,
+  maxRequests: env.rateLimitMaxRequests,
+});
+
+function getClientKey(request) {
+  const forwardedFor = request.headers["x-forwarded-for"];
+
+  if (typeof forwardedFor === "string" && forwardedFor.trim()) {
+    return forwardedFor.split(",")[0].trim();
+  }
+
+  return request.ip || request.socket.remoteAddress || "unknown";
+}
+
+function applyRateLimit(request, response, next) {
+  const result = rateLimiter.check(getClientKey(request));
+
+  response.setHeader("X-RateLimit-Limit", String(env.rateLimitMaxRequests));
+  response.setHeader("X-RateLimit-Remaining", String(result.remaining));
+  response.setHeader("X-RateLimit-Reset", String(Math.ceil(result.resetAt / 1000)));
+
+  if (!result.allowed) {
+    response.status(429).json({
+      error: "Too many requests. Please wait a few minutes and try again.",
+      retryAfterSeconds: Math.max(1, Math.ceil((result.resetAt - Date.now()) / 1000)),
+    });
+    return;
+  }
+
+  next();
+}
 
 app.use(
   cors({
@@ -21,21 +54,22 @@ app.use(
   }),
 );
 app.use(express.json());
+app.set("trust proxy", true);
 
 app.get("/health", (_request, response) => {
   response.json({
     ok: true,
-    provider: "gemini",
-    model: env.geminiModel,
+    provider: "openai",
+    model: env.openAiModel,
     timestamp: new Date().toISOString(),
   });
 });
 
-app.post("/api/puzzle", async (_request, response) => {
+app.post("/api/puzzle", applyRateLimit, async (_request, response) => {
   try {
     const { publicPuzzle, privatePuzzle } = await generatePuzzle({
-      apiKey: env.geminiApiKey,
-      model: env.geminiModel,
+      apiKey: env.openAiApiKey,
+      model: env.openAiModel,
     });
 
     const sessionId = store.create(privatePuzzle);

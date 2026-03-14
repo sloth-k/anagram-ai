@@ -4,7 +4,7 @@ An AI-generated newspaper-style word puzzle game inspired by Angaram-style jumbl
 
 ## What it does
 
-- Generates a fresh puzzle on every page load using Gemini.
+- Generates a fresh puzzle on every page load using OpenAI.
 - Shows 5 clue-based words with only some letters prefilled.
 - Marks one position in each word as the "circled" letter.
 - Unlocks a final 5-letter answer using the circled letters.
@@ -17,7 +17,7 @@ An AI-generated newspaper-style word puzzle game inspired by Angaram-style jumbl
 
 ## Local setup
 
-1. Create a Gemini API key in Google AI Studio.
+1. Create an OpenAI API key in the OpenAI platform dashboard.
 2. Copy `backend/.env.example` to `backend/.env`.
 3. Copy `frontend/.env.example` to `frontend/.env`.
 4. Fill in the API values.
@@ -45,9 +45,11 @@ npm run dev:frontend
 ### Backend
 
 - `PORT`: API port, defaults to `4000`
-- `GEMINI_API_KEY`: required
-- `GEMINI_MODEL`: optional, defaults to `gemini-2.5-flash-lite`
+- `OPENAI_API_KEY`: required
+- `OPENAI_MODEL`: optional, defaults to `gpt-4o-mini`
 - `SESSION_TTL_MINUTES`: optional, defaults to `30`
+- `RATE_LIMIT_WINDOW_MINUTES`: optional, defaults to `10`
+- `RATE_LIMIT_MAX_REQUESTS`: optional, defaults to `20`
 - `ALLOWED_ORIGIN`: comma-separated allowed origins
 
 ### Frontend
@@ -73,5 +75,6 @@ See `DEPLOY.md` for the exact settings and commands.
 ## Notes
 
 - The backend stores puzzle answers only in temporary in-memory sessions.
+- The backend includes a simple in-memory IP-based rate limit for puzzle generation.
 - No puzzle words are hardcoded or persisted.
 - The code is structured so user accounts, leaderboards, or a daily mode can be added later.

@@ -1,4 +1,4 @@
-import { generateWithGemini } from "./geminiClient.js";
+import { generateWithOpenAI } from "./openaiClient.js";
 
 const SYSTEM_INSTRUCTION = `
 You create word puzzles similar to a newspaper jumble.
@@ -157,17 +157,17 @@ function buildPublicPuzzle(validPuzzle) {
 
 export async function generatePuzzle({ apiKey, model }) {
   if (!apiKey) {
-    throw new Error("Missing GEMINI_API_KEY.");
+    throw new Error("Missing OPENAI_API_KEY.");
   }
 
   let lastError = null;
 
   for (let attempt = 1; attempt <= 3; attempt += 1) {
     try {
-      const raw = await generateWithGemini({
+      const raw = await generateWithOpenAI({
         apiKey,
         model,
-        systemInstruction: SYSTEM_INSTRUCTION,
+        instructions: SYSTEM_INSTRUCTION,
         prompt: `${PROMPT}\n\nCreate a brand new puzzle now.`,
       });
 
