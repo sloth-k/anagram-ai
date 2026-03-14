@@ -1,13 +1,19 @@
+import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import { getEnv } from "./lib/env.js";
 import { PuzzleStore } from "./lib/puzzleStore.js";
-import { generatePuzzle } from "./lib/generatePuzzle.js";
 import { MemoryRateLimiter } from "./lib/rateLimiter.js";
+import { PuzzleCache } from "./lib/puzzleCache.js";
+import { PuzzleCatalog } from "./lib/puzzleCatalog.js";
+import { InterestTracker } from "./lib/interestTracker.js";
 
 const env = getEnv();
 const app = express();
 const store = new PuzzleStore(env.sessionTtlMinutes);
+const puzzleCache = new PuzzleCache(env.puzzleCacheMinutes);
+const puzzleCatalog = new PuzzleCatalog(env.activePuzzleLimit);
+const interestTracker = new InterestTracker();
 const rateLimiter = new MemoryRateLimiter({
   windowMinutes: env.rateLimitWindowMinutes,
   maxRequests: env.rateLimitMaxRequests,
@@ -41,6 +47,15 @@ function applyRateLimit(request, response, next) {
   next();
 }
 
+function createSessionResponse(puzzlePayload) {
+  const sessionId = store.create(puzzlePayload.privatePuzzle);
+
+  return {
+    sessionId,
+    puzzle: puzzlePayload.publicPuzzle,
+  };
+}
+
 app.use(
   cors({
     origin(origin, callback) {
@@ -59,31 +74,69 @@ app.set("trust proxy", true);
 app.get("/health", (_request, response) => {
   response.json({
     ok: true,
-    provider: "gemini",
-    model: env.geminiModel,
+    mode: "catalog",
+    remainingPuzzles: puzzleCatalog.remaining(),
+    totalPuzzles: puzzleCatalog.total(),
+    interestClicks: interestTracker.total(),
     timestamp: new Date().toISOString(),
   });
 });
 
-app.post("/api/puzzle", applyRateLimit, async (_request, response) => {
+app.post("/api/puzzle", async (request, response) => {
+  const forceNew = Boolean(request.body?.forceNew);
+
+  if (!forceNew) {
+    const cachedPuzzle = puzzleCache.get();
+
+    if (cachedPuzzle) {
+      response.json(createSessionResponse(cachedPuzzle));
+      return;
+    }
+  }
+
+  applyRateLimit(request, response, () => {});
+
+  if (response.headersSent) {
+    return;
+  }
+
   try {
-    const { publicPuzzle, privatePuzzle } = await generatePuzzle({
-      apiKey: env.geminiApiKey,
-      model: env.geminiModel,
-    });
+    const nextPuzzle = puzzleCatalog.next();
 
-    const sessionId = store.create(privatePuzzle);
+    if (!nextPuzzle) {
+      response.status(410).json({
+        error: "All launch puzzles have been solved.",
+        exhausted: true,
+        remainingPuzzles: 0,
+        totalPuzzles: puzzleCatalog.total(),
+        interestClicks: interestTracker.total(),
+      });
+      return;
+    }
 
+    puzzleCache.set(nextPuzzle);
     response.json({
-      sessionId,
-      puzzle: publicPuzzle,
+      ...createSessionResponse(nextPuzzle),
+      remainingPuzzles: puzzleCatalog.remaining(),
+      totalPuzzles: puzzleCatalog.total(),
     });
   } catch (error) {
     response.status(503).json({
-      error: "Unable to generate puzzle right now.",
+      error: "Unable to load a puzzle right now.",
       details: error.message,
     });
   }
+});
+
+app.post("/api/interest", (_request, response) => {
+  const clientKey = getClientKey(_request);
+  const result = interestTracker.record(clientKey);
+
+  response.json({
+    ok: true,
+    recorded: result.recorded,
+    interestClicks: result.total,
+  });
 });
 
 app.post("/api/guess-word", (request, response) => {

@@ -203,10 +203,20 @@ function validatePuzzleShape(candidate) {
 }
 
 function buildPublicPuzzle(validPuzzle) {
+  const letters = [...validPuzzle.finalAnswer];
+  const scrambleOrder = letters.map((_, index) => index).sort(() => Math.random() - 0.5);
+  const scrambledLetters = scrambleOrder.map((index) => letters[index]);
+  const revealSlotsByWord = Array(validPuzzle.words.length).fill(-1);
+
+  scrambleOrder.forEach((wordIndex, scrambledIndex) => {
+    revealSlotsByWord[wordIndex] = scrambledIndex;
+  });
+
   return {
     titleClue: validPuzzle.titleClue,
     finalLength: validPuzzle.finalAnswer.length,
-    scrambledLetters: [...validPuzzle.finalAnswer].sort(() => Math.random() - 0.5),
+    scrambledLetters,
+    revealSlotsByWord,
     words: validPuzzle.words.map((word) => ({
       clue: word.clue,
       length: word.answer.length,
@@ -220,31 +230,55 @@ function buildPublicPuzzle(validPuzzle) {
   };
 }
 
+export function preparePuzzlePayload(rawPuzzle) {
+  const normalizedPuzzle = {
+    ...rawPuzzle,
+    finalAnswer: Array.isArray(rawPuzzle?.words)
+      ? rawPuzzle.words
+          .map((word) => {
+            const answer = normalizeWord(word?.answer);
+            const circleIndex = Number(word?.circleIndex);
+
+            if (!answer || !Number.isInteger(circleIndex) || circleIndex < 0 || circleIndex >= answer.length) {
+              return "";
+            }
+
+            return answer[circleIndex];
+          })
+          .join("")
+      : rawPuzzle?.finalAnswer,
+  };
+
+  const privatePuzzle = validatePuzzleShape(normalizedPuzzle);
+
+  return {
+    publicPuzzle: buildPublicPuzzle(privatePuzzle),
+    privatePuzzle,
+  };
+}
+
 export async function generatePuzzle({ apiKey, model }) {
   if (!apiKey) {
     throw new Error("Missing GEMINI_API_KEY.");
   }
 
   let lastError = null;
+  let retryFeedback = "";
 
-  for (let attempt = 1; attempt <= 3; attempt += 1) {
+  for (let attempt = 1; attempt <= 8; attempt += 1) {
     try {
       const raw = await generateWithGemini({
         apiKey,
         model,
         systemInstruction: SYSTEM_INSTRUCTION,
-        prompt: `${PROMPT}\n\nCreate a brand new puzzle now.`,
+        prompt: `${PROMPT}\n\nCreate a brand new puzzle now.${retryFeedback}`,
       });
 
       const parsed = JSON.parse(raw);
-      const validated = validatePuzzleShape(parsed);
-
-      return {
-        publicPuzzle: buildPublicPuzzle(validated),
-        privatePuzzle: validated,
-      };
+      return preparePuzzlePayload(parsed);
     } catch (error) {
       lastError = error;
+      retryFeedback = `\n\nYour previous attempt was invalid for this reason: ${error.message}\nReturn a completely new puzzle that fixes that exact issue and still follows every rule exactly.`;
     }
   }
 
