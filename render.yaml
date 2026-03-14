@@ -7,10 +7,10 @@ services:
     startCommand: npm start
     plan: free
     envVars:
-      - key: OPENAI_API_KEY
+      - key: GEMINI_API_KEY
         sync: false
-      - key: OPENAI_MODEL
-        value: gpt-4o-mini
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash-lite
       - key: SESSION_TTL_MINUTES
         value: "30"
       - key: RATE_LIMIT_WINDOW_MINUTES

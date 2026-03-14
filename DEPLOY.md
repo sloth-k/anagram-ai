@@ -30,8 +30,8 @@ Create a new Render Web Service and use these values:
 
 Set these environment variables in Render:
 
-- `OPENAI_API_KEY`: your OpenAI API key
-- `OPENAI_MODEL`: `gpt-4o-mini`
+- `GEMINI_API_KEY`: your Google AI Studio API key
+- `GEMINI_MODEL`: `gemini-2.5-flash-lite`
 - `SESSION_TTL_MINUTES`: `30`
 - `RATE_LIMIT_WINDOW_MINUTES`: `10`
 - `RATE_LIMIT_MAX_REQUESTS`: `20`

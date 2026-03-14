@@ -59,8 +59,8 @@ app.set("trust proxy", true);
 app.get("/health", (_request, response) => {
   response.json({
     ok: true,
-    provider: "openai",
-    model: env.openAiModel,
+    provider: "gemini",
+    model: env.geminiModel,
     timestamp: new Date().toISOString(),
   });
 });
@@ -68,8 +68,8 @@ app.get("/health", (_request, response) => {
 app.post("/api/puzzle", applyRateLimit, async (_request, response) => {
   try {
     const { publicPuzzle, privatePuzzle } = await generatePuzzle({
-      apiKey: env.openAiApiKey,
-      model: env.openAiModel,
+      apiKey: env.geminiApiKey,
+      model: env.geminiModel,
     });
 
     const sessionId = store.create(privatePuzzle);
