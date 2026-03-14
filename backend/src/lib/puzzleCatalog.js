@@ -82,7 +82,7 @@ function shuffle(values) {
 
 export class PuzzleCatalog {
   constructor(activePuzzleLimit = 20, persistedState = null, onChange = () => {}) {
-    this.puzzles = rawPuzzleCatalog.map((rawPuzzle) => preparePuzzlePayload(rawPuzzle));
+    this.puzzles = curatedLaunchPuzzles.map((rawPuzzle) => preparePuzzlePayload(rawPuzzle));
     const safeLimit = Math.max(1, Math.min(activePuzzleLimit, this.puzzles.length));
     const savedOrder = Array.isArray(persistedState?.order) ? persistedState.order : null;
     const savedPointer = Number.isInteger(persistedState?.pointer) ? persistedState.pointer : 0;
