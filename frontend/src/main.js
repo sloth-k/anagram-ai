@@ -18,11 +18,34 @@ const state = {
   interestClicks: 0,
   interestSent: false,
   celebrationTick: 0,
+  launchStateLoaded: false,
 };
 
 const app = document.querySelector("#app");
 
 function saveState() {
+  if (state.status === "exhausted") {
+    sessionStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        sessionId: "",
+        puzzle: null,
+        wordInputs: [],
+        solvedWords: [],
+        circleLetters: [],
+        finalGuess: Array(5).fill(""),
+        finalSolved: false,
+        remainingPuzzles: state.remainingPuzzles,
+        totalPuzzles: state.totalPuzzles,
+        interestClicks: state.interestClicks,
+        interestSent: state.interestSent,
+        status: state.status,
+        launchStateLoaded: state.launchStateLoaded,
+      }),
+    );
+    return;
+  }
+
   if (!state.puzzle || !state.sessionId) {
     sessionStorage.removeItem(STORAGE_KEY);
     return;
@@ -40,6 +63,10 @@ function saveState() {
       finalSolved: state.finalSolved,
       remainingPuzzles: state.remainingPuzzles,
       totalPuzzles: state.totalPuzzles,
+      interestClicks: state.interestClicks,
+      interestSent: state.interestSent,
+      status: state.status,
+      launchStateLoaded: state.launchStateLoaded,
     }),
   );
 }
@@ -54,6 +81,24 @@ function restoreState() {
   try {
     const saved = JSON.parse(raw);
 
+    if (saved?.status === "exhausted") {
+      state.sessionId = "";
+      state.puzzle = null;
+      state.wordInputs = [];
+      state.solvedWords = [];
+      state.circleLetters = [];
+      state.finalGuess = Array(5).fill("");
+      state.finalSolved = false;
+      state.remainingPuzzles = saved.remainingPuzzles ?? null;
+      state.totalPuzzles = saved.totalPuzzles ?? null;
+      state.interestClicks = saved.interestClicks ?? 0;
+      state.interestSent = Boolean(saved.interestSent);
+      state.status = "exhausted";
+      state.launchStateLoaded = Boolean(saved.launchStateLoaded);
+      state.message = "All launch puzzles have been solved.";
+      return true;
+    }
+
     if (!saved?.sessionId || !saved?.puzzle) {
       return false;
     }
@@ -67,7 +112,10 @@ function restoreState() {
     state.finalSolved = Boolean(saved.finalSolved);
     state.remainingPuzzles = saved.remainingPuzzles ?? null;
     state.totalPuzzles = saved.totalPuzzles ?? null;
-    state.status = "ready";
+    state.interestClicks = saved.interestClicks ?? 0;
+    state.interestSent = Boolean(saved.interestSent);
+    state.status = saved.status === "exhausted" ? "exhausted" : "ready";
+    state.launchStateLoaded = Boolean(saved.launchStateLoaded);
     state.message = "Restored your current puzzle.";
     return true;
   } catch {
@@ -121,8 +169,10 @@ function render() {
     state.status === "exhausted"
       ? `${state.totalPuzzles ?? 0} of ${state.totalPuzzles ?? 0} launch puzzles served`
       : state.remainingPuzzles !== null && state.totalPuzzles !== null
-      ? `${state.remainingPuzzles} of ${state.totalPuzzles} new puzzles left`
-      : "20 handcrafted launch puzzles";
+        ? `${state.remainingPuzzles} of ${state.totalPuzzles} new puzzles left`
+        : state.launchStateLoaded
+          ? "Launch inventory unavailable"
+          : "Loading launch inventory...";
   const revealedScramble = Array.from(
     { length: state.puzzle?.scrambledLetters?.length || 5 },
     () => "",
@@ -400,6 +450,7 @@ async function loadPuzzle({ forceNew = false } = {}) {
         state.remainingPuzzles = data.remainingPuzzles ?? 0;
         state.totalPuzzles = data.totalPuzzles ?? state.totalPuzzles;
         state.interestClicks = data.interestClicks ?? state.interestClicks;
+        state.launchStateLoaded = true;
         clearSavedState();
         render();
         return;
@@ -417,6 +468,7 @@ async function loadPuzzle({ forceNew = false } = {}) {
     state.circleLetters = data.puzzle.words.map(() => "");
     state.remainingPuzzles = data.remainingPuzzles ?? state.remainingPuzzles;
     state.totalPuzzles = data.totalPuzzles ?? state.totalPuzzles;
+    state.launchStateLoaded = true;
     state.status = "ready";
     state.message = "A puzzle is ready.";
   } catch (error) {
@@ -425,6 +477,26 @@ async function loadPuzzle({ forceNew = false } = {}) {
   }
 
   render();
+}
+
+async function loadLaunchState() {
+  try {
+    const response = await fetch(`${API_BASE_URL}/health`);
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error("Health check failed.");
+    }
+
+    state.remainingPuzzles = data.remainingPuzzles ?? state.remainingPuzzles;
+    state.totalPuzzles = data.totalPuzzles ?? state.totalPuzzles;
+    state.interestClicks = data.interestClicks ?? state.interestClicks;
+    state.launchStateLoaded = true;
+    saveState();
+  } catch {
+    state.launchStateLoaded = true;
+    saveState();
+  }
 }
 
 async function sendInterest() {
@@ -771,7 +843,11 @@ app.addEventListener("click", (event) => {
 });
 
 if (!restoreState()) {
-  loadPuzzle();
+  loadLaunchState().finally(() => loadPuzzle());
 } else {
-  render();
+  if (state.status === "exhausted") {
+    loadLaunchState().finally(() => render());
+  } else {
+    loadLaunchState().finally(() => render());
+  }
 }
