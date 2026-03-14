@@ -3,7 +3,7 @@ import { dirname, resolve } from "node:path";
 
 const DEFAULT_STATE = {
   catalogOrder: null,
-  catalogPointer: 0,
+  browserProgress: {},
   interestKeys: [],
 };
 
@@ -37,13 +37,16 @@ export class RuntimeStateStore {
   getCatalogState() {
     return {
       order: Array.isArray(this.state.catalogOrder) ? this.state.catalogOrder : null,
-      pointer: Number.isInteger(this.state.catalogPointer) ? this.state.catalogPointer : 0,
+      browserProgress:
+        this.state.browserProgress && typeof this.state.browserProgress === "object"
+          ? this.state.browserProgress
+          : {},
     };
   }
 
-  setCatalogState(order, pointer) {
+  setCatalogState(order, browserProgress) {
     this.state.catalogOrder = order;
-    this.state.catalogPointer = pointer;
+    this.state.browserProgress = browserProgress;
     this.save();
   }
 

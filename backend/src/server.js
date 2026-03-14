@@ -14,8 +14,8 @@ const app = express();
 const runtimeStateStore = new RuntimeStateStore();
 const store = new PuzzleStore(env.sessionTtlMinutes);
 const puzzleCache = new PuzzleCache(env.puzzleCacheMinutes);
-const puzzleCatalog = new PuzzleCatalog(env.activePuzzleLimit, runtimeStateStore.getCatalogState(), (order, pointer) => {
-  runtimeStateStore.setCatalogState(order, pointer);
+const puzzleCatalog = new PuzzleCatalog(env.activePuzzleLimit, runtimeStateStore.getCatalogState(), (order, browserProgress) => {
+  runtimeStateStore.setCatalogState(order, browserProgress);
 });
 const interestTracker = new InterestTracker(runtimeStateStore.getInterestKeys(), (keys) => {
   runtimeStateStore.setInterestKeys(keys);
@@ -24,6 +24,11 @@ const rateLimiter = new MemoryRateLimiter({
   windowMinutes: env.rateLimitWindowMinutes,
   maxRequests: env.rateLimitMaxRequests,
 });
+
+function getBrowserKey(request) {
+  const browserId = String(request.body?.browserId || request.query?.browserId || "").trim();
+  return browserId || getClientKey(request);
+}
 
 function getClientKey(request) {
   const forwardedFor = request.headers["x-forwarded-for"];
@@ -77,11 +82,12 @@ app.use(
 app.use(express.json());
 app.set("trust proxy", true);
 
-app.get("/health", (_request, response) => {
+app.get("/health", (request, response) => {
+  const browserKey = getBrowserKey(request);
   response.json({
     ok: true,
     mode: "catalog",
-    remainingPuzzles: puzzleCatalog.remaining(),
+    remainingPuzzles: puzzleCatalog.remaining(browserKey),
     totalPuzzles: puzzleCatalog.total(),
     interestClicks: interestTracker.total(),
     timestamp: new Date().toISOString(),
@@ -90,11 +96,12 @@ app.get("/health", (_request, response) => {
 
 app.post("/api/puzzle", async (request, response) => {
   const forceNew = Boolean(request.body?.forceNew);
+  const browserKey = getBrowserKey(request);
 
   if (!forceNew) {
     const cachedPuzzle = puzzleCache.get();
 
-    if (cachedPuzzle) {
+    if (cachedPuzzle?.browserKey === browserKey) {
       response.json(createSessionResponse(cachedPuzzle));
       return;
     }
@@ -107,7 +114,7 @@ app.post("/api/puzzle", async (request, response) => {
   }
 
   try {
-    const nextPuzzle = puzzleCatalog.next();
+    const nextPuzzle = puzzleCatalog.next(browserKey);
 
     if (!nextPuzzle) {
       response.status(410).json({
@@ -120,10 +127,13 @@ app.post("/api/puzzle", async (request, response) => {
       return;
     }
 
-    puzzleCache.set(nextPuzzle);
+    puzzleCache.set({
+      ...nextPuzzle,
+      browserKey,
+    });
     response.json({
       ...createSessionResponse(nextPuzzle),
-      remainingPuzzles: puzzleCatalog.remaining(),
+      remainingPuzzles: puzzleCatalog.remaining(browserKey),
       totalPuzzles: puzzleCatalog.total(),
     });
   } catch (error) {
@@ -135,8 +145,7 @@ app.post("/api/puzzle", async (request, response) => {
 });
 
 app.post("/api/interest", (_request, response) => {
-  const clientKey = getClientKey(_request);
-  const result = interestTracker.record(clientKey);
+  const result = interestTracker.record(getBrowserKey(_request));
 
   response.json({
     ok: true,

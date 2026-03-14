@@ -85,7 +85,10 @@ export class PuzzleCatalog {
     this.puzzles = curatedLaunchPuzzles.map((rawPuzzle) => preparePuzzlePayload(rawPuzzle));
     const safeLimit = Math.max(1, Math.min(activePuzzleLimit, this.puzzles.length));
     const savedOrder = Array.isArray(persistedState?.order) ? persistedState.order : null;
-    const savedPointer = Number.isInteger(persistedState?.pointer) ? persistedState.pointer : 0;
+    const savedBrowserProgress =
+      persistedState?.browserProgress && typeof persistedState.browserProgress === "object"
+        ? persistedState.browserProgress
+        : {};
     const hasUsableSavedState =
       savedOrder &&
       savedOrder.length === safeLimit &&
@@ -95,24 +98,38 @@ export class PuzzleCatalog {
     this.order = hasUsableSavedState
       ? savedOrder
       : shuffle(this.puzzles.map((_value, index) => index)).slice(0, safeLimit);
-    this.pointer = Math.max(0, Math.min(savedPointer, this.order.length));
+    this.browserProgress = Object.fromEntries(
+      Object.entries(savedBrowserProgress)
+        .filter(([_key, value]) => Number.isInteger(value))
+        .map(([key, value]) => [key, Math.max(0, Math.min(value, this.order.length))]),
+    );
     this.onChange = onChange;
     this.persist();
   }
 
-  next() {
-    if (this.pointer >= this.order.length) {
+  next(browserKey) {
+    const progress = this.getProgress(browserKey);
+
+    if (progress >= this.order.length) {
       return null;
     }
 
-    const puzzle = this.puzzles[this.order[this.pointer]];
-    this.pointer += 1;
+    const puzzle = this.puzzles[this.order[progress]];
+    this.browserProgress[browserKey] = progress + 1;
     this.persist();
     return puzzle;
   }
 
-  remaining() {
-    return Math.max(0, this.order.length - this.pointer);
+  getProgress(browserKey) {
+    if (!browserKey) {
+      return 0;
+    }
+
+    return Math.max(0, Math.min(Number(this.browserProgress[browserKey] || 0), this.order.length));
+  }
+
+  remaining(browserKey) {
+    return Math.max(0, this.order.length - this.getProgress(browserKey));
   }
 
   total() {
@@ -120,6 +137,6 @@ export class PuzzleCatalog {
   }
 
   persist() {
-    this.onChange(this.order, this.pointer);
+    this.onChange(this.order, this.browserProgress);
   }
 }

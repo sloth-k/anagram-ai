@@ -2,6 +2,7 @@ import "./styles.css";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:4000";
 const STORAGE_KEY = "angaram-ai-session-v1";
+const BROWSER_ID_KEY = "lexigo-browser-id-v1";
 
 const state = {
   sessionId: "",
@@ -22,6 +23,21 @@ const state = {
 };
 
 const app = document.querySelector("#app");
+
+function getBrowserId() {
+  const existing = localStorage.getItem(BROWSER_ID_KEY);
+
+  if (existing) {
+    return existing;
+  }
+
+  const created =
+    globalThis.crypto?.randomUUID?.() ||
+    `browser-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
+  localStorage.setItem(BROWSER_ID_KEY, created);
+  return created;
+}
 
 function saveState() {
   if (state.status === "exhausted") {
@@ -411,6 +427,7 @@ function render() {
 }
 
 async function loadPuzzle({ forceNew = false } = {}) {
+  const browserId = getBrowserId();
   state.status = "loading";
   state.message = "Loading the next puzzle...";
   state.puzzle = null;
@@ -431,6 +448,7 @@ async function loadPuzzle({ forceNew = false } = {}) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
+        browserId,
         forceNew,
       }),
     });
@@ -481,7 +499,9 @@ async function loadPuzzle({ forceNew = false } = {}) {
 
 async function loadLaunchState() {
   try {
-    const response = await fetch(`${API_BASE_URL}/health`);
+    const response = await fetch(
+      `${API_BASE_URL}/health?browserId=${encodeURIComponent(getBrowserId())}`,
+    );
     const data = await response.json();
 
     if (!response.ok) {
@@ -505,6 +525,9 @@ async function sendInterest() {
     headers: {
       "Content-Type": "application/json",
     },
+    body: JSON.stringify({
+      browserId: getBrowserId(),
+    }),
   });
   const data = await response.json();
 
@@ -518,7 +541,7 @@ async function sendInterest() {
   state.interestClicks = data.interestClicks ?? state.interestClicks;
   state.message = data.recorded
     ? "Thanks. Your interest was recorded."
-    : "Your interest was already recorded from this connection.";
+    : "Your interest was already recorded from this browser.";
   render();
 }
 
